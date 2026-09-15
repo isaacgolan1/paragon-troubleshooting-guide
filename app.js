@@ -12,39 +12,79 @@
   }
 
   function sampleTree(){
-    var start = uid('q'), noPower = uid('q'), hasPower = uid('q'),
-        outSuccess = uid('o'), outFail = uid('o'), outEscalate = uid('o');
+    var start = uid('q'),
+        powerCheck = uid('q'), commFault = uid('q'),
+        powerOn = uid('o'), powerOff = uid('o'),
+        commHmi = uid('o'), commEscalate = uid('o'), commAuxAcb = uid('o'),
+        blank1 = uid('o'), blank2 = uid('o');
+    var powerBodyText = 'HMI display screen inside the control cabinet should be lit up with a blue backlight. If the HMI screen is blank, verify that the main unit disconnect switch is in the ON position, and the service convenience breaker (CB-01) inside the control cabinet is in the ON position.';
     var nodes = {};
     nodes[start] = {
       id:start, type:'question',
-      text:'The rooftop unit is not running. What do you see at the unit?',
+      title:'What is the primary issue?',
+      text:'',
       options:[
-        {label:'No power at all', nextId:noPower},
-        {label:'Has power, but will not start', nextId:hasPower}
+        {label:'Cooling issue', nextId:powerCheck},
+        {label:'Heating issue', nextId:powerCheck},
+        {label:'Communication fault', nextId:commFault}
       ]
     };
-    nodes[noPower] = {
-      id:noPower, type:'question',
-      text:'Is the disconnect switch in the ON position?',
+    nodes[powerCheck] = {
+      id:powerCheck, type:'question',
+      title:'Verify that HVAC unit is powered on',
+      text:powerBodyText,
       options:[
-        {label:'It was off — switched it on', nextId:outSuccess},
-        {label:'Already on, still no power', nextId:outFail}
+        {label:'Yes, the power is on', nextId:powerOn},
+        {label:'No, the power is off', nextId:powerOff}
       ]
     };
-    nodes[hasPower] = {
-      id:hasPower, type:'question',
-      text:'Is the thermostat sending an active call for heat or cool?',
+    nodes[commFault] = {
+      id:commFault, type:'question',
+      title:'Which type of comm fault is present?',
+      text:'Modbus/comm fault indicates that there is a communication error between the RTU board and one of its connected components.',
       options:[
-        {label:'Yes, call is active but unit is not responding', nextId:outEscalate},
-        {label:'No active call present', nextId:outSuccess}
+        {label:'HMI', nextId:commHmi},
+        {label:'Supply VFD', nextId:commEscalate},
+        {label:'Aux/ACB Board', nextId:commAuxAcb},
+        {label:'Compressor VFD', nextId:commEscalate}
       ]
     };
-    nodes[outSuccess] = { id:outSuccess, type:'outcome', outcomeType:'success',
-      resolution:'Issue resolved at this step. Confirm the unit runs normally before closing out.' };
-    nodes[outFail] = { id:outFail, type:'outcome', outcomeType:'fail',
-      resolution:'No power with a good disconnect points to a wiring or electrical fault. Escalate to a qualified technician.' };
-    nodes[outEscalate] = { id:outEscalate, type:'outcome', outcomeType:'neutral',
-      resolution:'An active call with no response suggests a control fault. Escalate to a qualified technician for further diagnosis.' };
+    nodes[powerOn] = {
+      id:powerOn, type:'question',
+      title:'Check filters BEFORE troubleshooting',
+      text:'Restricted airflow is often the cause of issues with heating performance or active faults. Before proceeding with any troubleshooting, confirm the following:\n1) Verify all disposable filters are clean\n2) Wash all metal mesh intake filters',
+      options:[]
+    };
+    nodes[powerOff] = {
+      id:powerOff, type:'question',
+      title:'',
+      text:'Verify with electrician that it is safe to energize the unit before proceeding with troubleshooting.',
+      options:[]
+    };
+    nodes[commHmi] = {
+      id:commHmi, type:'question',
+      title:'Verify remote HMI/sensor quantity',
+      text:'One or more remote HMI screens and/or wall sensors may need to be daisy-chained back to the unit-mounted HMI in the RTU control cabinet.\n\n' +
+        '1) Refer to submittals and schematics to confirm how many remote HMIs/sensors should be installed.\n\n' +
+        '2) Confirm that all remote HMIs/sensors have been installed and daisy-chained via CAT5 back to the RTU\'s unit-mounted HMI screen.\n\n' +
+        '3) Confirm that the RTU\'s factory settings for HMI quantity match the installed quantity',
+      options:[]
+    };
+    nodes[commEscalate] = {
+      id:commEscalate, type:'question',
+      title:'Contact CaptiveAire for technical assistance',
+      text:'Please note the 7 digit job # from the unit nameplate and provide it to the CaptiveAire representative.\n\n' +
+        'This path requires escalation. Gather the information above before contacting support.',
+      options:[]
+    };
+    nodes[commAuxAcb] = {
+      id:commAuxAcb, type:'question',
+      title:'Check wiring between RTU board and aux board',
+      text:'Some ERV modules ship loose and the auxiliary board requires a field-wired CAT5 connection. Verify that this connection has been made.',
+      options:[]
+    };
+    nodes[blank1] = { id:blank1, type:'outcome', outcomeType:'neutral', resolution:'' };
+    nodes[blank2] = { id:blank2, type:'outcome', outcomeType:'neutral', resolution:'' };
     return { rootId:start, nodes:nodes };
   }
 
@@ -60,7 +100,7 @@
     return Object.keys(tree.nodes).map(function(k){ return tree.nodes[k]; });
   }
   function shortLabel(node){
-    var t = node.type === 'question' ? node.text : node.resolution;
+    var t = node.type === 'question' ? (node.title || node.text) : node.resolution;
     t = (t || '').trim();
     if(!t) return '(empty)';
     return t.length > 46 ? t.slice(0,46) + '…' : t;
@@ -113,7 +153,13 @@
       ['outcome-success', 'Resolved — fixed at this step'],
       ['outcome-neutral', 'Escalate — hand off to next tier'],
       ['outcome-fail', 'Unresolved — confirmed fault']
-    ].forEach(function(pair){
+    ].forEach(function(pair, idx){
+      if(idx === 1){
+        var subhead = document.createElement('div');
+        subhead.className = 'legend-subhead';
+        subhead.textContent = 'Outcome nodes (end of a path)';
+        legend.appendChild(subhead);
+      }
       var row = document.createElement('div');
       row.className = 'legend-row';
       var dot = document.createElement('div');
@@ -260,6 +306,17 @@
     panel.appendChild(fImg);
 
     if(node.type === 'question'){
+      // question title
+      var fTitle = document.createElement('div'); fTitle.className = 'field';
+      var lTitle = document.createElement('label'); lTitle.textContent = 'Question title';
+      var titleInput = document.createElement('input');
+      titleInput.type = 'text';
+      titleInput.value = node.title || '';
+      titleInput.oninput = function(){ node.title = titleInput.value; };
+      titleInput.onblur = function(){ render(); };
+      fTitle.appendChild(lTitle); fTitle.appendChild(titleInput);
+      panel.appendChild(fTitle);
+
       // question text
       var f1 = document.createElement('div'); f1.className = 'field';
       var l1 = document.createElement('label'); l1.textContent = 'Question text';
@@ -390,7 +447,7 @@
     var wrap = document.createElement('div');
     wrap.className = 'trace-wrap';
     var steps = playPath.concat([{nodeId:playCurrentId}]);
-    var spacing = 130, r = 8, y = 20, w = Math.max(steps.length * spacing + 40, 200);
+    var spacing = 130, r = 8, y = 20, leftPad = 48, w = Math.max(steps.length * spacing + 40 + (leftPad-30), 200);
     var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
     svg.setAttribute('class','trace-svg');
     svg.setAttribute('width', w);
@@ -398,10 +455,10 @@
     svg.setAttribute('viewBox','0 0 ' + w + ' 46');
 
     steps.forEach(function(step, i){
-      var cx = 30 + i*spacing;
+      var cx = leftPad + i*spacing;
       if(i > 0){
         var line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', 30 + (i-1)*spacing + r);
+        line.setAttribute('x1', leftPad + (i-1)*spacing + r);
         line.setAttribute('y1', y);
         line.setAttribute('x2', cx - r);
         line.setAttribute('y2', y);
@@ -454,6 +511,21 @@
     if(playCurrentId === null){ resetPlay(); }
     col.appendChild(traceSVG());
 
+    if(playPath.length > 0){
+      var topBackRow = document.createElement('div');
+      topBackRow.className = 'play-back-row-top';
+      var topBack = document.createElement('button');
+      topBack.className = 'btn';
+      topBack.textContent = '← Back one step';
+      topBack.onclick = function(){
+        var last = playPath.pop();
+        playCurrentId = last.nodeId;
+        render();
+      };
+      topBackRow.appendChild(topBack);
+      col.appendChild(topBackRow);
+    }
+
     var node = tree.nodes[playCurrentId];
     var card = document.createElement('div');
     card.className = 'play-card';
@@ -471,6 +543,13 @@
       eyebrow.textContent = 'Step ' + (playPath.length + 1);
       body.appendChild(eyebrow);
 
+      if(node.title){
+        var qTitle = document.createElement('div');
+        qTitle.className = 'play-title';
+        qTitle.textContent = node.title;
+        body.appendChild(qTitle);
+      }
+
       if(node.image){
         var img = document.createElement('img');
         img.className = 'play-image';
@@ -478,10 +557,12 @@
         body.appendChild(img);
       }
 
-      var q = document.createElement('div');
-      q.className = 'play-question';
-      q.textContent = node.text || '(no question text set)';
-      body.appendChild(q);
+      if(node.text){
+        var q = document.createElement('div');
+        q.className = 'play-question';
+        q.textContent = node.text;
+        body.appendChild(q);
+      }
 
       var opts = document.createElement('div');
       opts.className = 'play-options';
@@ -660,17 +741,17 @@
         '  var wrap = document.createElement("div");',
         '  wrap.className = "trace-wrap";',
         '  var steps = playPath.concat([{nodeId:playCurrentId}]);',
-        '  var spacing = 130, r = 8, y = 20, w = Math.max(steps.length * spacing + 40, 200);',
+        '  var spacing = 130, r = 8, y = 20, leftPad = 48, w = Math.max(steps.length * spacing + 40 + (leftPad-30), 200);',
         '  var svg = document.createElementNS("http://www.w3.org/2000/svg","svg");',
         '  svg.setAttribute("class","trace-svg");',
         '  svg.setAttribute("width", w);',
         '  svg.setAttribute("height", 46);',
         '  svg.setAttribute("viewBox","0 0 " + w + " 46");',
         '  steps.forEach(function(step, i){',
-        '    var cx = 30 + i*spacing;',
+        '    var cx = leftPad + i*spacing;',
         '    if(i > 0){',
         '      var line = document.createElementNS("http://www.w3.org/2000/svg","line");',
-        '      line.setAttribute("x1", 30 + (i-1)*spacing + r);',
+        '      line.setAttribute("x1", leftPad + (i-1)*spacing + r);',
         '      line.setAttribute("y1", y);',
         '      line.setAttribute("x2", cx - r);',
         '      line.setAttribute("y2", y);',
@@ -719,6 +800,20 @@
         '  }',
         '  if(playCurrentId === null){ resetPlay(); }',
         '  col.appendChild(traceSVG());',
+        '  if(playPath.length > 0){',
+        '    var topBackRow = document.createElement("div");',
+        '    topBackRow.className = "play-back-row-top";',
+        '    var topBack = document.createElement("button");',
+        '    topBack.className = "btn";',
+        '    topBack.textContent = "← Back one step";',
+        '    topBack.onclick = function(){',
+        '      var last = playPath.pop();',
+        '      playCurrentId = last.nodeId;',
+        '      render();',
+        '    };',
+        '    topBackRow.appendChild(topBack);',
+        '    col.appendChild(topBackRow);',
+        '  }',
         '  var node = tree.nodes[playCurrentId];',
         '  var card = document.createElement("div");',
         '  card.className = "play-card";',
@@ -734,16 +829,24 @@
         '    eyebrow.className = "play-eyebrow";',
         '    eyebrow.textContent = "Step " + (playPath.length + 1);',
         '    body.appendChild(eyebrow);',
+        '    if(node.title){',
+        '      var qTitle = document.createElement("div");',
+        '      qTitle.className = "play-title";',
+        '      qTitle.textContent = node.title;',
+        '      body.appendChild(qTitle);',
+        '    }',
         '    if(node.image){',
         '      var img = document.createElement("img");',
         '      img.className = "play-image";',
         '      img.src = node.image;',
         '      body.appendChild(img);',
         '    }',
-        '    var q = document.createElement("div");',
-        '    q.className = "play-question";',
-        '    q.textContent = node.text || "";',
-        '    body.appendChild(q);',
+        '    if(node.text){',
+        '      var q = document.createElement("div");',
+        '      q.className = "play-question";',
+        '      q.textContent = node.text;',
+        '      body.appendChild(q);',
+        '    }',
         '    var opts = document.createElement("div");',
         '    opts.className = "play-options";',
         '    (node.options||[]).forEach(function(opt){',
