@@ -153,8 +153,8 @@
       ['outcome-success', 'Resolved — fixed at this step'],
       ['outcome-neutral', 'Escalate — hand off to next tier'],
       ['outcome-fail', 'Unresolved — confirmed fault']
-    ].forEach(function(pair, idx){
-      if(idx === 1){
+    ].forEach(function(pair){
+      if(pair[0].indexOf('outcome-') === 0 && !legend.querySelector('.legend-subhead')){
         var subhead = document.createElement('div');
         subhead.className = 'legend-subhead';
         subhead.textContent = 'Outcome nodes (end of a path)';
@@ -438,6 +438,9 @@
   }
 
   // ---------- play mode ----------
+  var MSG_NO_ROOT = 'This tree has no start node set. Go to Build, select a node, and click "Set as start node".';
+  var MSG_MISSING_NODE = 'This path points to a node that no longer exists.';
+
   function resetPlay(){
     playPath = [];
     playCurrentId = tree.rootId;
@@ -503,7 +506,7 @@
     if(!tree.rootId || !tree.nodes[tree.rootId]){
       var warn = document.createElement('div');
       warn.className = 'no-root-warning';
-      warn.textContent = 'This tree has no start node set. Go to Build, select a node, and click "Set as start node".';
+      warn.textContent = MSG_NO_ROOT;
       col.appendChild(warn);
       return col;
     }
@@ -535,7 +538,7 @@
     if(!node){
       var missing = document.createElement('div');
       missing.className = 'no-root-warning';
-      missing.textContent = 'This path points to a node that no longer exists.';
+      missing.textContent = MSG_MISSING_NODE;
       body.appendChild(missing);
     } else if(node.type === 'question'){
       var eyebrow = document.createElement('div');
@@ -578,12 +581,6 @@
         };
         opts.appendChild(b);
       });
-      if(!(node.options||[]).length){
-        var noOpts = document.createElement('div');
-        noOpts.className = 'empty-hint';
-        noOpts.textContent = 'This question has no answer options yet — add some in Build mode.';
-        opts.appendChild(noOpts);
-      }
       body.appendChild(opts);
 
     } else {
@@ -705,6 +702,10 @@
     });
   }
 
+  function escapeHtml(str){
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
   document.getElementById('btnExportPlayer').onclick = function(){
     var exportBtn = document.getElementById('btnExportPlayer');
     var originalLabel = exportBtn.textContent;
@@ -731,176 +732,14 @@
         'var tree = ' + treeJson + ';',
         'var playPath = [];',
         'var playCurrentId = null;',
+        'var MSG_NO_ROOT = "This guide has no content yet.";',
+        'var MSG_MISSING_NODE = "This path points to a step that no longer exists.";',
         '',
-        'function resetPlay(){',
-        '  playPath = [];',
-        '  playCurrentId = tree.rootId;',
-        '}',
+        resetPlay.toString(),
         '',
-        'function traceSVG(){',
-        '  var wrap = document.createElement("div");',
-        '  wrap.className = "trace-wrap";',
-        '  var steps = playPath.concat([{nodeId:playCurrentId}]);',
-        '  var spacing = 130, r = 8, y = 20, leftPad = 48, w = Math.max(steps.length * spacing + 40 + (leftPad-30), 200);',
-        '  var svg = document.createElementNS("http://www.w3.org/2000/svg","svg");',
-        '  svg.setAttribute("class","trace-svg");',
-        '  svg.setAttribute("width", w);',
-        '  svg.setAttribute("height", 46);',
-        '  svg.setAttribute("viewBox","0 0 " + w + " 46");',
-        '  steps.forEach(function(step, i){',
-        '    var cx = leftPad + i*spacing;',
-        '    if(i > 0){',
-        '      var line = document.createElementNS("http://www.w3.org/2000/svg","line");',
-        '      line.setAttribute("x1", leftPad + (i-1)*spacing + r);',
-        '      line.setAttribute("y1", y);',
-        '      line.setAttribute("x2", cx - r);',
-        '      line.setAttribute("y2", y);',
-        '      line.setAttribute("stroke", "#D00000");',
-        '      line.setAttribute("stroke-width", "2");',
-        '      svg.appendChild(line);',
-        '    }',
-        '    var n = tree.nodes[step.nodeId];',
-        '    var fill = "#D00000";',
-        '    if(n && n.type === "outcome"){',
-        '      fill = n.outcomeType === "success" ? "#1E7A4C" : n.outcomeType === "fail" ? "#8C1414" : "#5B6167";',
-        '    } else if(i < steps.length - 1){',
-        '      fill = "#1C1E21";',
-        '    }',
-        '    var circle = document.createElementNS("http://www.w3.org/2000/svg","circle");',
-        '    circle.setAttribute("cx", cx);',
-        '    circle.setAttribute("cy", y);',
-        '    circle.setAttribute("r", r);',
-        '    circle.setAttribute("fill", fill);',
-        '    svg.appendChild(circle);',
-        '    if(i < playPath.length){',
-        '      var label = document.createElementNS("http://www.w3.org/2000/svg","text");',
-        '      label.setAttribute("x", cx);',
-        '      label.setAttribute("y", y + 24);',
-        '      label.setAttribute("text-anchor","middle");',
-        '      label.setAttribute("font-family","IBM Plex Mono, monospace");',
-        '      label.setAttribute("font-size","9");',
-        '      label.setAttribute("fill","#4A5D68");',
-        '      var lbl = (playPath[i].label || "").slice(0,14);',
-        '      label.textContent = lbl + ((playPath[i].label||"").length>14?"…":"");',
-        '      svg.appendChild(label);',
-        '    }',
-        '  });',
-        '  wrap.appendChild(svg);',
-        '  return wrap;',
-        '}',
+        traceSVG.toString(),
         '',
-        'function renderPlaySingleColumn(){',
-        '  var col = document.createElement("div");',
-        '  if(!tree.rootId || !tree.nodes[tree.rootId]){',
-        '    var warn = document.createElement("div");',
-        '    warn.className = "no-root-warning";',
-        '    warn.textContent = "This guide has no content yet.";',
-        '    col.appendChild(warn);',
-        '    return col;',
-        '  }',
-        '  if(playCurrentId === null){ resetPlay(); }',
-        '  col.appendChild(traceSVG());',
-        '  if(playPath.length > 0){',
-        '    var topBackRow = document.createElement("div");',
-        '    topBackRow.className = "play-back-row-top";',
-        '    var topBack = document.createElement("button");',
-        '    topBack.className = "btn";',
-        '    topBack.textContent = "← Back one step";',
-        '    topBack.onclick = function(){',
-        '      var last = playPath.pop();',
-        '      playCurrentId = last.nodeId;',
-        '      render();',
-        '    };',
-        '    topBackRow.appendChild(topBack);',
-        '    col.appendChild(topBackRow);',
-        '  }',
-        '  var node = tree.nodes[playCurrentId];',
-        '  var card = document.createElement("div");',
-        '  card.className = "play-card";',
-        '  var body = document.createElement("div");',
-        '  body.className = "play-card-body";',
-        '  if(!node){',
-        '    var missing = document.createElement("div");',
-        '    missing.className = "no-root-warning";',
-        '    missing.textContent = "This path points to a step that no longer exists.";',
-        '    body.appendChild(missing);',
-        '  } else if(node.type === "question"){',
-        '    var eyebrow = document.createElement("div");',
-        '    eyebrow.className = "play-eyebrow";',
-        '    eyebrow.textContent = "Step " + (playPath.length + 1);',
-        '    body.appendChild(eyebrow);',
-        '    if(node.title){',
-        '      var qTitle = document.createElement("div");',
-        '      qTitle.className = "play-title";',
-        '      qTitle.textContent = node.title;',
-        '      body.appendChild(qTitle);',
-        '    }',
-        '    if(node.image){',
-        '      var img = document.createElement("img");',
-        '      img.className = "play-image";',
-        '      img.src = node.image;',
-        '      body.appendChild(img);',
-        '    }',
-        '    if(node.text){',
-        '      var q = document.createElement("div");',
-        '      q.className = "play-question";',
-        '      q.textContent = node.text;',
-        '      body.appendChild(q);',
-        '    }',
-        '    var opts = document.createElement("div");',
-        '    opts.className = "play-options";',
-        '    (node.options||[]).forEach(function(opt){',
-        '      var b = document.createElement("button");',
-        '      b.className = "play-option-btn";',
-        '      b.textContent = opt.label || "(unlabeled option)";',
-        '      b.disabled = !opt.nextId;',
-        '      b.onclick = function(){',
-        '        playPath.push({nodeId:node.id, label:opt.label});',
-        '        playCurrentId = opt.nextId;',
-        '        render();',
-        '      };',
-        '      opts.appendChild(b);',
-        '    });',
-        '    body.appendChild(opts);',
-        '  } else {',
-        '    var banner = document.createElement("div");',
-        '    banner.className = "outcome-banner " + (node.outcomeType || "neutral");',
-        '    banner.textContent = node.outcomeType === "success" ? "Resolved" : node.outcomeType === "fail" ? "Unresolved" : "Escalate";',
-        '    body.appendChild(banner);',
-        '    if(node.image){',
-        '      var img2 = document.createElement("img");',
-        '      img2.className = "play-image";',
-        '      img2.src = node.image;',
-        '      body.appendChild(img2);',
-        '    }',
-        '    var res = document.createElement("div");',
-        '    res.className = "play-resolution";',
-        '    res.textContent = node.resolution || "";',
-        '    body.appendChild(res);',
-        '  }',
-        '  card.appendChild(body);',
-        '  var backRow = document.createElement("div");',
-        '  backRow.className = "play-back-row";',
-        '  if(playPath.length > 0){',
-        '    var back = document.createElement("button");',
-        '    back.className = "btn";',
-        '    back.textContent = "← Back one step";',
-        '    back.onclick = function(){',
-        '      var last = playPath.pop();',
-        '      playCurrentId = last.nodeId;',
-        '      render();',
-        '    };',
-        '    backRow.appendChild(back);',
-        '  }',
-        '  var restart = document.createElement("button");',
-        '  restart.className = "btn";',
-        '  restart.textContent = "Start over";',
-        '  restart.onclick = function(){ resetPlay(); render(); };',
-        '  backRow.appendChild(restart);',
-        '  card.appendChild(backRow);',
-        '  col.appendChild(card);',
-        '  return col;',
-        '}',
+        renderPlaySingleColumn.toString(),
         '',
         'function render(){',
         '  var layout = document.getElementById("layout");',
@@ -912,7 +751,7 @@
         'render();'
       ].join('\n');
 
-      var doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<title>' + titleText + '</title>\n' +
+      var doc = '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<title>' + escapeHtml(titleText) + '</title>\n' +
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n' +
         '<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">\n' +
         '<style>\n' + cssText + '\n</style>\n</head>\n<body>\n' +
@@ -924,7 +763,7 @@
         '        <div class="divider"></div>\n' +
         '        <div class="brand-text">\n' +
         '          <div class="eyebrow">Field Diagnostics</div>\n' +
-        '          <h1>' + titleText + '</h1>\n' +
+        '          <h1>' + escapeHtml(titleText) + '</h1>\n' +
         '        </div>\n' +
         '      </div>\n' +
         '    </div>\n' +
